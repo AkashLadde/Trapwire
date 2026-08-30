@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TRAPWIRE — Demo Environment</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="landing">
+  <div class="landing-inner">
+    <div class="landing-kicker">TRAPWIRE · Threat Response &amp; Attack Pattern Wire-Intrusion Recognition Engine</div>
+    <h1>Local Demo Environment</h1>
+    <p class="landing-sub">Two independent portals, one running system. Choose which side to enter.</p>
+
+    <div class="portal-cards">
+      <a class="portal-card" href="/company/login">
+        <div class="portal-card-icon icon-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <div class="portal-card-title">Company Portal</div>
+        <div class="portal-card-desc">The defender's side — admin console, live threat monitoring, and DPDP compliance reporting.</div>
+        <span class="portal-card-cta">Enter as Admin →</span>
+      </a>
+
+      <a class="portal-card" href="/attacker">
+        <div class="portal-card-icon icon-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        </div>
+        <div class="portal-card-title">Attacker Portal</div>
+        <div class="portal-card-desc">Simulated attacker console — VPN spoofing, brute-force console, targets the Company Portal only.</div>
+        <span class="portal-card-cta">Enter Simulation →</span>
+      </a>
+    </div>
+
+    <p class="landing-disclaimer">⚠ Educational simulation for a college capstone project. Both portals talk only to this
+      local server — nothing here reaches the real internet or any real system.</p>
+  </div>
+</body>
+</html>

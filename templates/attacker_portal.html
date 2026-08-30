@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Attacker Console (Simulated)</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="dash-bg dark">
+<canvas id="hackerBgCanvas" class="hacker-bg-canvas"></canvas>
+<svg id="hackerSilhouette" class="hacker-silhouette" viewBox="0 0 300 400" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Coded (non-photographic) hooded-figure-at-a-laptop motif, built from
+       shapes only, so the binary-rain canvas can show through it. -->
+  <defs>
+    <radialGradient id="hoodGlow" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#2DD4BF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="150" cy="140" rx="110" ry="110" fill="url(#hoodGlow)"/>
+  <path d="M150 40 C90 40 60 100 60 160 L60 230 C60 245 75 250 90 250 L210 250 C225 250 240 245 240 230 L240 160 C240 100 210 40 150 40 Z"
+        fill="#04070c" stroke="#2DD4BF" stroke-width="1.5" opacity="0.9"/>
+  <ellipse cx="150" cy="150" rx="42" ry="52" fill="#000" stroke="#2DD4BF" stroke-width="1" opacity="0.85"/>
+  <rect x="70" y="255" width="160" height="14" rx="4" fill="#04070c" stroke="#2DD4BF" stroke-width="1"/>
+  <path d="M95 269 L110 340 L190 340 L205 269 Z" fill="#04070c" stroke="#2DD4BF" stroke-width="1"/>
+</svg>
+<header class="topbar dark">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:-3px;margin-right:6px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    Attacker Console <span>(Simulated — Educational)</span>
+  </div>
+  <a class="btn btn-ghost" href="/">Exit</a>
+</header>
+
+<main class="attacker-wrap">
+  <section class="panel">
+    <h3>1. Spoof VPN Exit Node</h3>
+    <p class="muted">Cosmetic only — the real connecting IP is still what TRAPWIRE's
+      server sees. This demonstrates why VPNs alone don't defeat attribution
+      techniques like canary tokens.</p>
+    <div class="vpn-list">
+      {% for node in vpn_nodes %}
+      <button class="vpn-btn" data-ip="{{ node.fake_ip }}">{{ node.label }}<br><span>{{ node.fake_ip }}</span></button>
+      {% endfor %}
+    </div>
+    <p>Apparent IP: <span id="apparentIp" class="mono">Not connected</span></p>
+    <div id="vpnHopTrail" class="vpn-hop-trail"></div>
+  </section>
+
+  <section class="panel">
+    <h3>2. Brute-Force Login Console</h3>
+    <p class="muted">Target: <code>TrapWire Admin Console</code> — username
+      <code>{{ target_username }}</code>. Attempts run against this app's own
+      <code>/api/login</code> endpoint only.</p>
+    <div class="wordlist-box">
+      <strong>Wordlist:</strong>
+      <code>{{ wordlist|join(', ') }}</code>
+    </div>
+    <button class="btn btn-red" id="startAttack">Start Brute-Force Attack</button>
+    <p class="attack-count-note" id="attackCountNote"></p>
+    <div id="attemptLog" class="attempt-log"></div>
+  </section>
+
+  <section class="panel">
+    <h3>3. Dictionary Attack</h3>
+    <p class="muted">Simulated only — walks a larger dictionary of common
+      leaked passwords against the target, purely for side-by-side
+      comparison with brute-force. Does not call the real login endpoint.</p>
+    <div class="dict-box">
+      <strong>Dictionary source:</strong>
+      <code>rockyou-sample.txt (top common passwords)</code>
+    </div>
+    <button class="btn btn-purple" id="startDict">Start Dictionary Attack</button>
+    <p class="attack-count-note" id="dictCountNote"></p>
+    <div id="dictLog" class="attempt-log"></div>
+  </section>
+
+  <section class="panel">
+    <h3>4. Rainbow Table Lookup</h3>
+    <p class="muted">Simulated only — instead of guessing passwords one by
+      one, a rainbow table matches a captured hash against a precomputed
+      hash&rarr;plaintext table. Much faster than brute-force, but only works
+      if the hash is already in the table (illustrative data below, not the
+      real admin credential).</p>
+    <button class="btn btn-amber" id="startRainbow">Run Rainbow Table Lookup</button>
+    <table class="rainbow-table" id="rainbowTable">
+      <thead><tr><th>#</th><th>Hash (SHA-256, truncated)</th><th>Lookup result</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel hidden" id="successPanel">
+    <h3>Credentials Cracked</h3>
+    <p>Login succeeded. Proceed to the target dashboard as the compromised account.</p>
+    <a class="btn btn-blue" href="/company/dashboard" target="_blank">Open Company Dashboard</a>
+  </section>
+</main>
+
+<script>
+const targetUsername = "{{ target_username }}";
+const wordlist = {{ wordlist|tojson }};
+
+/* ---------------------------------------------------------------------
+   1) VPN "circuit" hop — cosmetic only. Every click bounces the apparent
+   location through 4-5 decoy countries (like a Tor circuit building)
+   before landing on the node that was actually clicked. The real
+   connecting IP TRAPWIRE's server sees never changes.
+--------------------------------------------------------------------- */
+const decoyHopPool = [
+  { label: "Brazil - Sao Paulo",    ip: "191.101.34.12"  },
+  { label: "Japan - Tokyo",         ip: "103.4.17.88"    },
+  { label: "Russia - Moscow",       ip: "5.188.10.44"    },
+  { label: "France - Paris",        ip: "51.15.229.71"   },
+  { label: "Canada - Toronto",      ip: "162.219.176.5"  },
+  { label: "South Africa - Cape Town", ip: "197.220.11.90" },
+  { label: "UK - London",           ip: "185.86.148.23"  },
+  { label: "India - Mumbai",        ip: "103.87.60.14"   },
+  { label: "Sweden - Stockholm",    ip: "46.246.31.9"    },
+  { label: "UAE - Dubai",           ip: "94.200.181.60"  },
+  { label: "South Korea - Seoul",   ip: "121.128.4.19"   },
+  { label: "Australia - Sydney",    ip: "103.5.140.77"   },
+];
+
+function shuffleCopy(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+document.querySelectorAll(".vpn-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    if (btn.dataset.hopping === "1") return;
+    btn.dataset.hopping = "1";
+    const apparentIp = document.getElementById("apparentIp");
+    const trail = document.getElementById("vpnHopTrail");
+    apparentIp.classList.add("jumping");
+    btn.classList.add("hopping");
+    trail.textContent = "";
+
+    // 4-5 hops through random decoy countries, differs every click
+    const hopCount = 4 + Math.floor(Math.random() * 2); // 4 or 5
+    const hops = shuffleCopy(decoyHopPool).slice(0, hopCount);
+    for (const hop of hops) {
+      apparentIp.textContent = hop.ip + " (relaying via " + hop.label + ")";
+      trail.textContent += (trail.textContent ? " -> " : "Circuit: ") + hop.label;
+      await new Promise(r => setTimeout(r, 220));
+    }
+
+    // land on the node the user actually clicked
+    apparentIp.textContent = btn.dataset.ip + " (spoofed display only)";
+    trail.textContent += " -> " + btn.textContent.trim().split("\n")[0] + " (final hop, display only)";
+    apparentIp.classList.remove("jumping");
+    btn.classList.remove("hopping");
+    btn.dataset.hopping = "0";
+  });
+});
+
+/* ---------------------------------------------------------------------
+   2) Brute-force console — the REAL wordlist attempts against /api/login
+   are unchanged (still what actually flags the session and cracks the
+   demo login). On top of that we now run a batch of 10-15 decoy
+   candidate guesses first, randomly chosen and reshuffled every time
+   you click, so the on-screen attempt count and the exact combinations
+   differ on every run instead of always stopping at the same list.
+--------------------------------------------------------------------- */
+const decoyPasswordPool = [
+  "iloveyou1", "dragon123", "monkey99", "shadow2024", "sunshine88",
+  "football7", "baseball22", "trustno1x", "master2026", "superman99",
+  "princess07", "abc12345", "starwars1", "hunter2024", "batman123",
+  "flower55", "cheese99", "tigerclaw", "phoenix21", "hockey13",
+  "freedom19", "michael90", "jennifer5", "computer3", "internet7",
+  "whatever1", "loveme2", "secret007", "ninja321", "matrix404",
+  "orange88", "purple21", "cookie99", "diamond7", "thunder55",
+];
+
+document.getElementById("startAttack").addEventListener("click", async () => {
+  const log = document.getElementById("attemptLog");
+  const note = document.getElementById("attackCountNote");
+  log.innerHTML = "";
+  document.getElementById("startAttack").disabled = true;
+
+  // 10-15 decoy attempts, randomised order and selection every click
+  const decoyCount = 10 + Math.floor(Math.random() * 6); // 10..15
+  const decoys = shuffleCopy(decoyPasswordPool).slice(0, decoyCount);
+  note.textContent = `Running ${decoys.length} decoy combinations, then the targeted wordlist (${wordlist.length} entries)...`;
+
+  for (const pw of decoys) {
+    const line = document.createElement("div");
+    line.textContent = `Trying "${pw}" ... failed`;
+    line.className = "attempt-fail";
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+    await new Promise(r => setTimeout(r, 90));
+  }
+
+  for (const pw of wordlist) {
+    const body = new URLSearchParams({username: targetUsername, password: pw});
+    const res = await fetch("/api/login", {method: "POST", body});
+    const line = document.createElement("div");
+    line.textContent = `Trying "${pw}" ... ${res.ok ? "SUCCESS" : "failed"}`;
+    line.className = res.ok ? "attempt-ok" : "attempt-fail";
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+    await new Promise(r => setTimeout(r, 350));
+    if (res.ok) {
+      document.getElementById("successPanel").classList.remove("hidden");
+      break;
+    }
+  }
+  document.getElementById("startAttack").disabled = false;
+});
+
+/* ---------------------------------------------------------------------
+   3) Dictionary attack — simulated only, does not touch /api/login.
+   Purely a visual comparison of "attack style" against brute force.
+--------------------------------------------------------------------- */
+const dictionaryPool = [
+  "letmein", "welcome1", "qwertyuiop", "admin2023", "password1",
+  "changeme", "guest123", "root1234", "temp2024", "user@123",
+  "passw0rd", "login123", "default1", "access99", "system01",
+  "banking1", "secure01", "office365", "network1", "backup22",
+];
+
+document.getElementById("startDict").addEventListener("click", async () => {
+  const log = document.getElementById("dictLog");
+  const note = document.getElementById("dictCountNote");
+  log.innerHTML = "";
+  document.getElementById("startDict").disabled = true;
+
+  const count = 10 + Math.floor(Math.random() * 6); // 10..15
+  const words = shuffleCopy(dictionaryPool).slice(0, count);
+  note.textContent = `Testing ${words.length} dictionary entries (simulated, no live requests)...`;
+
+  for (const w of words) {
+    const line = document.createElement("div");
+    line.textContent = `Dictionary try "${w}" ... failed (no match)`;
+    line.className = "attempt-fail";
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+    await new Promise(r => setTimeout(r, 140));
+  }
+  const doneLine = document.createElement("div");
+  doneLine.textContent = "Dictionary exhausted — no match. This is why real defenses rate-limit and lock accounts.";
+  doneLine.className = "attempt-fail";
+  log.appendChild(doneLine);
+  document.getElementById("startDict").disabled = false;
+});
+
+/* ---------------------------------------------------------------------
+   4) Rainbow table lookup — simulated only. Illustrates precomputed
+   hash -> plaintext matching (fast) vs guessing (slow). Uses made-up
+   sample data, not the real admin credential.
+--------------------------------------------------------------------- */
+const rainbowSamples = [
+  { plain: "123456",     hash: "8d969eef6ecad3c2..." },
+  { plain: "password",   hash: "5e884898da280471..." },
+  { plain: "qwerty123",  hash: "65e84be33532fb78..." },
+  { plain: "letmein123", hash: "a94a8fe5ccb19ba6..." },
+  { plain: "welcome1",   hash: "2c624232cdd221771..." },
+  { plain: "monkey99",   hash: "b1d5781111d84f7b..." },
+];
+
+document.getElementById("startRainbow").addEventListener("click", async () => {
+  const body = document.querySelector("#rainbowTable tbody");
+  body.innerHTML = "";
+  document.getElementById("startRainbow").disabled = true;
+  const rows = shuffleCopy(rainbowSamples);
+
+  for (let i = 0; i < rows.length; i++) {
+    const tr = document.createElement("tr");
+    tr.className = "row-scanning";
+    tr.innerHTML = `<td>${i + 1}</td><td class="rainbow-hash">${rows[i].hash}</td><td>scanning table...</td>`;
+    body.appendChild(tr);
+    await new Promise(r => setTimeout(r, 180));
+    tr.className = "row-hit";
+    tr.children[2].textContent = `match found -> "${rows[i].plain}"`;
+  }
+});
+
+/* ---------------------------------------------------------------------
+   Background: coded (non-photographic) digital-rain canvas behind the
+   hooded-figure SVG motif above. Built entirely from drawn glyphs, not
+   a stock/generated image.
+--------------------------------------------------------------------- */
+(function initHackerBg() {
+  const canvas = document.getElementById("hackerBgCanvas");
+  const ctx = canvas.getContext("2d");
+  let cols, drops;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.floor(canvas.width / 16);
+    drops = new Array(cols).fill(0).map(() => Math.random() * -50);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const glyphs = "01";
+  function draw() {
+    ctx.fillStyle = "rgba(5,7,12,0.15)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = "14px 'JetBrains Mono', monospace";
+    for (let i = 0; i < cols; i++) {
+      const g = glyphs[Math.floor(Math.random() * glyphs.length)];
+      const x = i * 16;
+      const y = drops[i] * 16;
+      ctx.fillStyle = Math.random() > 0.97 ? "#A7F3D0" : "rgba(45,212,191,0.55)";
+      ctx.fillText(g, x, y);
+      if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

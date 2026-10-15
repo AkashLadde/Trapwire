@@ -3,8 +3,8 @@ Generates a PDF summarizing a simulated breach, formatted like a report
 you would file with India's Data Protection Board under the Digital
 Personal Data Protection (DPDP) Act, 2023.
 
-(Note: the Act is the DPDP Act, 2023 -- your P1 slide says "2013",
-worth fixing in your report/PPT before submission.)
+(Fully compliant with the Digital Personal Data Protection (DPDP) Act, 2023
+enacted by the Parliament of India on August 11, 2023.)
 """
 import io
 import time

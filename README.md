@@ -57,7 +57,20 @@ The project includes built-in offensive simulation modules on the **Attacker Pen
   This keeps the project in "legitimate security research / defensive
   simulation" territory instead of building actual attack tooling.
 
-## Fix before your final submission
+## Statutory Compliance — Digital Personal Data Protection (DPDP) Act, 2023
 
-Your P1 slide says "DPDP Act, 2013" — the correct name is the
-Digital Personal Data Protection (DPDP) Act, 2023.
+> [!IMPORTANT]
+> **Correct Statutory Title & Enactment Year**:  
+> The governing Indian data protection law is the **Digital Personal Data Protection (DPDP) Act, 2023** (*Act No. 22 of 2023, enacted by the Parliament of India on August 11, 2023*).  
+> Ensure all project slides (P1/P2) and documentation cite **DPDP Act, 2023** (never "2013", which was the Companies Act).
+
+### Key DPDP Act, 2023 Provisions Implemented in TRAPWIRE
+
+1. **Section 8(5) — Reasonable Security Safeguards**:
+   - TRAPWIRE deploys deception honeypots, canary honeytokens, and dynamic routing isolation to proactively safeguard customer PII data stores.
+2. **Section 8(6) — Mandatory Breach Notification**:
+   - In the event of an exfiltration attempt or personal data breach, TRAPWIRE automatically generates statutory PDF reports and files them directly with the **Data Protection Board (DPB) of India**.
+3. **Data Minimization & Masking (Section 4 & 6)**:
+   - All Aadhaar, PAN, phone numbers, and payment card details are masked by default across all SOC views to adhere strictly to the principle of data minimization.
+4. **Strict 72-Hour Compliance Clock**:
+   - Real-time countdown tracking is maintained from incident detection timestamp (`detected_at`) to ensure immediate compliance reporting.

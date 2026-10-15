@@ -18,48 +18,21 @@ uvicorn app.main:app --reload --port 8000
 
 Open http://127.0.0.1:8000/
 
-## How to demo it
+## Supported Attack Simulation Vectors (Honeypot Deception Engine)
 
-1. Open the Attacker Portal (`/attacker`) in one tab.
-   - Click a VPN node (cosmetic — shows why VPN alone doesn't defeat attribution).
-   - Click "Start Brute-Force Attack" — it tries the built-in wordlist against
-     the real login endpoint. The real password is a few attempts in, so it
-     fails a few times before succeeding (that failure count is what flags
-     the session as suspicious server-side).
-   - Click "Open Company Dashboard" once cracked.
-2. On the dashboard (as the attacker), click "Export Customer Data".
-   - The dashboard *view* still shows realistic-looking masked data (so the
-     deception holds up while the attacker is deciding what to do). But the
-     actual exported file is different: every sensitive field (Aadhaar,
-     PAN, phone, email, card) is replaced with its SHA-256 hash before
-     export — so even the downloaded file contains no usable personal
-     data, hashed on top of already being synthetic. The moment this
-     download happens, TRAPWIRE captures the real connecting IP/ISP,
-     automatically generates a PRELIMINARY breach report, and submits it
-     to the built-in Data Protection Board portal (see below) — which
-     issues an acknowledgement number back.
-   - "Opening" the downloaded file loads a small tracking page in the
-     attacker's own browser tab (the canary token). That page runs ordinary
-     JavaScript — the same category as any analytics script on any normal
-     website — to read screen resolution, timezone, language, and platform,
-     then sends that back. No code runs outside that one tab, nothing is
-     installed, nothing persists. This then triggers a FINAL/updated report
-     with full attribution, also submitted and acknowledged.
-3. Open the Company Portal (`/company/login`) in a separate/incognito
-   session and log in normally with `admin` / `Admin@2026!` on the first try
-   (no honeypot flag).
-   - Go to the Security Center tab — live alerts (brute-force detected,
-     honeypot served, canary triggered, device fingerprint captured) plus
-     an "Auto-Submitted Reports" list, each with a download link and a
-     link to its DPB acknowledgement certificate.
-   - You can also click "Generate Ad-hoc Report" anytime for a manual copy.
-4. Open the **Data Protection Board Portal** directly at `/dpb` — a
-   separate, distinctly-styled registry showing every breach notification
-   ever submitted, each with its own acknowledgement certificate page and
-   downloadable PDF. (This is implemented as a separate module/router
-   inside the same server rather than a second process, so there's only
-   one thing to run — but it has its own storage, templates, and look.)
-5. Reset state between demo runs: `GET /api/reset-demo`
+The project includes built-in offensive simulation modules on the **Attacker Pentest Console (Port 9000)** and corresponding deception & intrusion detection honeypots on the **Company Defender Server (Port 8000)**:
+
+| Attack Vector | Attacker Command / Action | Defender Endpoint | Deception / Honeypot Defense Response |
+| :--- | :--- | :--- | :--- |
+| **Credential Brute-Force** | `bruteforce --user admin` | `POST /api/login` | Flags session as suspicious after failed attempts; switches to synthetic honeypot data view. |
+| **SQL Injection (SQLi)** | `sqli [payload]` | `GET /api/search-customer` | Evaluates SQL syntax, quarantines query to fake SQLite/MySQL tables, returns decoy admin records, and auto-files preliminary DPB report. |
+| **IDOR / BOLA** | `idor 9901` | `GET /api/customer/{id}` | Detects unauthorized sequential ID traversal; serves synthetic customer profile with embedded canary beacon. |
+| **LFI / Path Traversal** | `lfi ../../.env` | `GET /api/download?file=...` | Detects directory navigation attempts; serves decoy `.env` file containing planted AWS/DB honeytokens. |
+| **Server-Side Request Forgery (SSRF)** | `ssrf http://169.254.169.254` | `GET /api/preview-url?url=...` | Detects cloud metadata probes; serves decoy AWS IMDSv2 IAM credentials. |
+| **Remote Command Execution (RCE)** | `rce 127.0.0.1; whoami` | `GET /api/diagnostics/ping` | Detects shell metacharacters; quarantines execution inside isolated deception container. |
+| **Canary Honeytoken Leak** | `honeytoken` | `GET /api/v1/internal/admin-dump` | Detects use of planted canary API key; executes high-confidence attacker de-anonymization and files final report. |
+| **Decoy Data Exfiltration** | `export data` | `GET /api/export` | Replaces sensitive fields with one-way SHA-256 hashes, embeds canary token, and files preliminary statutory DPB report. |
+| **Canary Attribution Beacon** | Opening invoice link | `GET /canary/{token}` | Executes client-side JavaScript fingerprinting (screen, timezone, platform, cores) and submits final DPB report. |
 
 ## What's real vs simulated (be upfront about this in your viva)
 

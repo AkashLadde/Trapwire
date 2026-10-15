@@ -1,21 +1,31 @@
 // Sidebar nav switching
 const crumbTab = document.getElementById("crumbTab");
 const tabLabels = {
-  orders: "Orders & Customers", security: "Security Center",
-  projects: "Projects", leaderboard: "Leaderboard",
-  administration: "Administration", library: "Library",
-  maps: "Maps", support: "Support & Help",
+  orders: "Orders & Customers", 
+  security: "Security Center & SOC",
+  projects: "Projects & Projections",
+  administration: "Administration & Team", 
+  library: "Document Library",
+  maps: "Global Locations & Maps", 
+  support: "Support & Help Center",
+  hardware: "Physical Hardware Nodes & IoT"
 };
 document.querySelectorAll(".side-link").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".side-link").forEach(b => b.classList.remove("active"));
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
     btn.classList.add("active");
-    document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+    const targetTab = document.getElementById("tab-" + btn.dataset.tab);
+    if (targetTab) targetTab.classList.remove("hidden");
     if (crumbTab) crumbTab.textContent = tabLabels[btn.dataset.tab] || btn.dataset.tab;
     if (btn.dataset.tab === "security") {
       const dot = document.getElementById("alertDot");
       if (dot) dot.classList.remove("show");
+    }
+    // Close mobile sidebar if open
+    const sidebar = document.getElementById("appSidebar");
+    if (sidebar && sidebar.classList.contains("mobile-open")) {
+      sidebar.classList.remove("mobile-open");
     }
   });
 });
@@ -121,6 +131,60 @@ function pushNotifPanelItem(a) {
   list.prepend(div);
 }
 
+// ============ EMERGENCY ALERT POPUP BANNER ============
+let emergencyDismissTimeout = null;
+function showEmergencyAlert(a) {
+  const banner = document.getElementById("emergencySecurityAlert");
+  const titleEl = document.getElementById("emergencyAlertTitle");
+  const msgEl = document.getElementById("emergencyAlertMsg");
+  if (!banner || !titleEl || !msgEl) return;
+
+  if (a.level === "critical") {
+    titleEl.textContent = "🚨 CRITICAL BREACH & EXFILTRATION DETECTED";
+  } else if (a.meta && a.meta.type === "failed_login") {
+    titleEl.textContent = `⚠️ SUSPICIOUS LOGIN ATTEMPT (Attempt #${a.meta.attempt})`;
+  } else {
+    titleEl.textContent = "🛡️ SECURITY TELEMETRY ALERT";
+  }
+
+  msgEl.textContent = a.message;
+  banner.classList.remove("hidden");
+
+  // Auto-dismiss after 12 seconds unless new critical alert comes
+  if (emergencyDismissTimeout) clearTimeout(emergencyDismissTimeout);
+  emergencyDismissTimeout = setTimeout(() => {
+    banner.classList.add("hidden");
+  }, 12000);
+}
+
+function dismissEmergencyAlert() {
+  const banner = document.getElementById("emergencySecurityAlert");
+  if (banner) banner.classList.add("hidden");
+  if (emergencyDismissTimeout) clearTimeout(emergencyDismissTimeout);
+}
+
+document.getElementById("emergencyViewBtn")?.addEventListener("click", () => {
+  dismissEmergencyAlert();
+  document.querySelector('.side-link[data-tab="security"]')?.click();
+});
+
+// ============ SIMULATED ADMIN SMARTPHONE WIDGET ============
+let phoneAlertCount = 0;
+
+function updatePhoneClock() {
+  const clockEl = document.getElementById("phoneClock");
+  if (clockEl) {
+    const now = new Date();
+    clockEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+function toggleAdminPhone() {
+  // Mobile phone simulator disabled per configuration
+}
+
+function pushAdminPhoneAlert(a) {
+  // SMS phone simulator disabled per configuration
+}
+
 // Export button
 const exportBtn = document.getElementById("exportBtn");
 if (exportBtn) {
@@ -184,12 +248,12 @@ function initThreatChart(initialAlerts) {
   if (!canvas || typeof Chart === "undefined") return;
 
   // initialAlerts is chronological (oldest first); build a running
-  // cumulative count of "threat-worthy" (critical) events over time.
+  // cumulative count of "threat-worthy" (critical or warning) events over time.
   let count = 0;
   const labels = [];
   const points = [];
   initialAlerts.forEach(a => {
-    if (a.level === "critical") {
+    if (a.level === "critical" || a.level === "warning") {
       count += 1;
       labels.push(new Date(a.timestamp * 1000).toLocaleTimeString());
       points.push(count);
@@ -223,7 +287,7 @@ function initThreatChart(initialAlerts) {
 }
 
 function pushThreatPoint(alert) {
-  if (!threatChart || alert.level !== "critical") return;
+  if (!threatChart || (alert.level !== "critical" && alert.level !== "warning")) return;
   const prevCount = threatChart.data.datasets[0].data.slice(-1)[0] || 0;
   threatChart.data.labels.push(new Date(alert.timestamp * 1000).toLocaleTimeString());
   threatChart.data.datasets[0].data.push(prevCount + 1);
@@ -255,6 +319,242 @@ function renderSubmittedReports() {
   });
 }
 
+// ============ LIVE THREAT TOAST POPUP & ATTRIBUTION SYSTEM ============
+let audioCtx = null;
+let currentForensicAlert = null;
+
+function playAlertChime(level) {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = level === 'critical' ? 'sawtooth' : 'sine';
+    const freq = level === 'critical' ? 880 : 587.33;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    if (level === 'critical') {
+      osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.35);
+    }
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.45);
+  } catch (e) {}
+}
+
+function updateSocAttackerCard(a) {
+  const meta = a.meta || {};
+  const ip = meta.ip || meta.attacker_ip || "185.220.101.45";
+  const isp = meta.isp || meta.attacker_isp || "Reliance Jio Infocomm Ltd / Tor Exit Node";
+  const city = meta.city || "Amsterdam";
+  const country = meta.country || "Netherlands";
+  const loc = (city && country) ? `${city}, ${country}` : (country || "Active Relay");
+  
+  const ipEl = document.getElementById("socAttackerIp");
+  const locEl = document.getElementById("socAttackerLoc");
+  const ispEl = document.getElementById("socAttackerIsp");
+  const typeEl = document.getElementById("socAttackType");
+  const dpbStatusEl = document.getElementById("socDpbStatus");
+  const dpbAckEl = document.getElementById("socDpbAck");
+  const deviceEl = document.getElementById("socAttackerDevice");
+  const canaryStatusEl = document.getElementById("socCanaryStatus");
+  const decoyStatusEl = document.getElementById("socDecoyStatus");
+
+  if (ipEl) ipEl.textContent = ip;
+  if (locEl) locEl.textContent = loc;
+  if (ispEl) ispEl.textContent = isp;
+  
+  let threatLabel = "Recon & Surface Probe";
+  if (a.message.includes("SQL")) threatLabel = "SQL Injection Exploit";
+  else if (a.message.includes("BRUTE-FORCE") || meta.type === "bruteforce_start") threatLabel = "Credential Brute-Force";
+  else if (a.message.includes("EXFILTRATION") || meta.type === "data_exfiltration") threatLabel = "Decoy Data Exfiltration";
+  else if (a.message.includes("CANARY")) threatLabel = "Canary Token Attribution";
+  else if (a.message.includes("HACKER WORKSTATION") || meta.type === "terminal_login_success") threatLabel = "Attacker Console Active";
+  else if (a.message.includes("LOGIN ATTEMPT") || meta.type === "failed_login" || meta.type === "terminal_login_attempt") threatLabel = "Attacker Login Attempt";
+  else if (a.message.includes("XSS")) threatLabel = "Cross-Site Scripting (XSS)";
+  else if (a.message.includes("TRAVERSAL")) threatLabel = "Path Traversal Probe";
+  else if (a.message.includes("VPN")) threatLabel = "VPN Proxy Spoofing";
+
+  if (typeEl) typeEl.textContent = threatLabel;
+  if (decoyStatusEl) decoyStatusEl.textContent = "Decoy Honeypot Quarantined";
+
+  if (meta.ack_number) {
+    if (dpbStatusEl) dpbStatusEl.textContent = "AUTO-SUBMITTED";
+    if (dpbAckEl) dpbAckEl.textContent = `Ack: ${meta.ack_number}`;
+  }
+
+  if (meta.screen || meta.platform) {
+    if (deviceEl) {
+      deviceEl.textContent = `${meta.platform || 'Linux x86_64'} · Screen ${meta.screen || '1920x1080'} · Cores: ${meta.cores || '8'} · ${meta.timezone || 'Asia/Kolkata'}`;
+    }
+  }
+
+  if (a.message.includes("CANARY") || meta.type === "canary_hit") {
+    if (canaryStatusEl) {
+      canaryStatusEl.textContent = "TRIGGERED & DE-ANONYMIZED";
+      canaryStatusEl.style.color = "#EF4444";
+    }
+  }
+}
+
+function showThreatToast(a) {
+  const stack = document.getElementById("liveToastStack");
+  if (!stack) return;
+  playAlertChime(a.level);
+
+  let title = "🛡️ Security Threat Telemetry";
+  if (a.level === "critical") {
+    if (a.message.includes("EXFILTRATION") || a.message.includes("extracted") || a.message.includes("downloaded")) title = "🚨 DATA EXFILTRATION DETECTED";
+    else if (a.message.includes("CANARY")) title = "🎯 CANARY TRACKING BEACON TRIPPED";
+    else if (a.message.includes("BRUTE-FORCE")) title = "💥 CREDENTIAL BRUTE-FORCE ATTACK";
+    else if (a.message.includes("SQL")) title = "💉 SQL INJECTION EXPLOIT DETECTED";
+    else if (a.message.includes("HACKER WORKSTATION") || a.message.includes("authenticated")) title = "🔑 HACKER WORKSTATION LOGGED IN";
+    else if (a.message.includes("DPDP BREACH REPORT AUTO-SUBMITTED")) title = "📄 STATUTORY DPDP REPORT AUTO-SUBMITTED";
+    else title = "🚨 CRITICAL INTRUSION DETECTED";
+  } else if (a.level === "warning") {
+    if (a.message.includes("LOGIN ATTEMPT")) title = "⚠️ ATTACKER LOGIN ATTEMPT";
+    else if (a.message.includes("PORT")) title = "🔍 PORT RECONNAISSANCE PROBE";
+    else if (a.message.includes("VPN")) title = "🌐 VPN PROXY HOPPING DETECTED";
+    else if (a.message.includes("XSS")) title = "⚡ XSS EXPLOIT INTERCEPTED";
+    else if (a.message.includes("TRAVERSAL")) title = "📂 PATH TRAVERSAL INTERCEPTED";
+    else title = "⚠️ ANOMALOUS ACTIVITY OBSERVED";
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `threat-toast toast-${a.level || 'info'}`;
+  
+  const meta = a.meta || {};
+  const ip = meta.ip || meta.attacker_ip || "185.220.101.45";
+  const isp = meta.isp || meta.attacker_isp || "Reliance Jio / Tor Relay";
+  const ackNum = meta.ack_number || null;
+  const t = new Date((a.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString();
+
+  let actionButtonsHtml = `
+    <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+      <button class="emergency-btn-view" style="padding:4px 10px;font-size:0.72rem;" onclick="openForensicModalFromToast('${encodeURIComponent(JSON.stringify(a))}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>
+        Inspect Forensics
+      </button>
+  `;
+
+  if (ackNum) {
+    actionButtonsHtml += `
+      <a href="/dpb/submission/${ackNum}" target="_blank" class="emergency-btn-dismiss" style="padding:4px 10px;font-size:0.72rem;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+        <span>DPB Ack: ${ackNum} →</span>
+      </a>
+    `;
+  }
+  actionButtonsHtml += `</div>`;
+
+  toast.innerHTML = `
+    <div class="toast-head">
+      <div class="toast-title-wrap">
+        <span class="toast-dot"></span>
+        <span class="toast-title">${title}</span>
+      </div>
+      <button class="toast-close" onclick="this.closest('.threat-toast').remove()">&times;</button>
+    </div>
+    <div class="toast-msg">${a.message}</div>
+    <div class="toast-meta-pills">
+      <span class="toast-pill ip">📡 IP: ${ip}</span>
+      <span class="toast-pill isp">🏢 ISP: ${isp}</span>
+      <span class="toast-pill sms">📲 SMS: +91 99016 25399</span>
+      ${ackNum ? `<span class="toast-pill" style="color:#10B981;border-color:rgba(16,185,129,0.3);">📄 DPB: ${ackNum}</span>` : ''}
+    </div>
+    ${actionButtonsHtml}
+    <div class="toast-progress"></div>
+  `;
+
+  stack.prepend(toast);
+
+  // Auto remove toast after 10 seconds
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(120%)";
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 10000);
+}
+
+function openForensicModalFromToast(encodedAlert) {
+  try {
+    const a = JSON.parse(decodeURIComponent(encodedAlert));
+    openForensicModal(a);
+  } catch (e) {
+    console.error("Forensic modal open error:", e);
+  }
+}
+
+function openForensicModal(a) {
+  currentForensicAlert = a;
+  const modal = document.getElementById("forensicModal");
+  if (!modal) return;
+
+  const meta = a.meta || {};
+  const ip = meta.ip || meta.attacker_ip || "185.220.101.45";
+  const isp = meta.isp || meta.attacker_isp || "Tor Exit Relay / DataCamp Ltd";
+  const city = meta.city || "Amsterdam";
+  const country = meta.country || "Netherlands";
+  const loc = `${city}, ${country}`;
+  const t = new Date((a.timestamp || Date.now() / 1000) * 1000).toLocaleString();
+
+  const fmThreatLevel = document.getElementById("fmThreatLevel");
+  const fmIp = document.getElementById("fmIp");
+  const fmIsp = document.getElementById("fmIsp");
+  const fmLoc = document.getElementById("fmLoc");
+  const fmTime = document.getElementById("fmTime");
+  const fmOs = document.getElementById("fmOs");
+  const fmScreen = document.getElementById("fmScreen");
+  const fmCores = document.getElementById("fmCores");
+  const fmTimezone = document.getElementById("fmTimezone");
+  const fmPayload = document.getElementById("fmPayload");
+  const fmAckId = document.getElementById("fmAckId");
+  const fmDpbLink = document.getElementById("fmDpbLink");
+
+  if (fmThreatLevel) {
+    fmThreatLevel.textContent = a.level === "critical" ? "CRITICAL THREAT" : "SUSPICIOUS INTRUSION";
+    fmThreatLevel.className = a.level === "critical" ? "status-pill status-cancelled" : "status-pill status-shipped";
+  }
+  if (fmIp) fmIp.textContent = ip;
+  if (fmIsp) fmIsp.textContent = isp;
+  if (fmLoc) fmLoc.textContent = loc;
+  if (fmTime) fmTime.textContent = t;
+
+  if (fmOs) fmOs.textContent = meta.platform || "Linux x86_64 (Kali Rolling)";
+  if (fmScreen) fmScreen.textContent = meta.screen || "1920 x 1080";
+  if (fmCores) fmCores.textContent = meta.cores ? `${meta.cores} Cores` : "8 Cores";
+  if (fmTimezone) fmTimezone.textContent = meta.timezone || "Asia/Kolkata (IST)";
+
+  if (fmPayload) {
+    fmPayload.textContent = meta.payload || a.message;
+  }
+
+  const ack = meta.ack_number || "DPB-2026-ACTIVE";
+  if (fmAckId) fmAckId.textContent = ack;
+  if (fmDpbLink) {
+    fmDpbLink.href = meta.ack_number ? `/dpb/submission/${meta.ack_number}` : "/dpb";
+  }
+
+  modal.classList.remove("hidden");
+}
+
+function closeForensicModal() {
+  const modal = document.getElementById("forensicModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function downloadForensicPdf() {
+  const btn = document.getElementById("reportBtn");
+  if (btn) btn.click();
+}
+
 if (alertFeed && !window.SUSPICIOUS) {
   const ICONS = {
     critical: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
@@ -264,17 +564,23 @@ if (alertFeed && !window.SUSPICIOUS) {
   function renderAlert(a) {
     const div = document.createElement("div");
     div.className = "alert-item alert-" + a.level;
+    div.style.cursor = "pointer";
+    div.title = "Click to inspect attacker forensics";
+    div.onclick = () => openForensicModal(a);
     const t = new Date(a.timestamp * 1000).toLocaleTimeString();
     div.innerHTML = `<span class="alert-ico">${ICONS[a.level] || ICONS.info}</span>
       <span class="alert-body"><span class="alert-time">${t}</span> ${a.message}</span>`;
     alertFeed.prepend(div);
-    if (a.message.includes("submitted to the Data Protection Board")) {
+    if (a.message.includes("submitted to the Data Protection Board") || a.message.includes("DPDP BREACH REPORT AUTO-SUBMITTED")) {
       renderSubmittedReports();
     }
   }
 
   fetch("/api/alerts").then(r => r.json()).then(list => {
     list.forEach(renderAlert);
+    if (list.length > 0) {
+      updateSocAttackerCard(list[0]);
+    }
     // /api/alerts returns newest-first; reverse for chronological chart init
     initThreatChart(list.slice().reverse());
   });
@@ -285,9 +591,13 @@ if (alertFeed && !window.SUSPICIOUS) {
   ws.onmessage = (evt) => {
     const a = JSON.parse(evt.data);
     renderAlert(a);
+    updateSocAttackerCard(a);
     pushThreatPoint(a);
     pushNotifPanelItem(a);
     bumpNotifBadge();
+    showEmergencyAlert(a);
+    showThreatToast(a);
+    pushAdminPhoneAlert(a);
     const securityTab = document.getElementById("tab-security");
     const dot = document.getElementById("alertDot");
     if (dot && securityTab && securityTab.classList.contains("hidden")) {

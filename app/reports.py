@@ -69,15 +69,33 @@ def build_breach_report_pdf(breach: dict, alerts: list, canary_hits: list,
     flow.append(Spacer(1, 0.6*cm))
 
     flow.append(Paragraph("1. Nature of the Incident", h2))
-    flow.append(Paragraph(
-        "An unauthorized login was detected on the company data portal after "
-        "multiple failed authentication attempts from a single source, consistent "
-        "with a credential brute-force attack. The account subsequently authenticated "
-        "successfully. In accordance with the system's deception-based defense "
-        "(honeypot) design, the session was automatically flagged as suspicious and "
-        "served synthetic decoy customer data instead of genuine personal data. "
-        "No genuine personal data belonging to real data principals was exposed.",
-        body))
+    atk_type = breach.get("attack_type", "bruteforce_start")
+    atk_payload = breach.get("payload", "")
+    atk_target = breach.get("target", "")
+
+    if "sqli" in atk_type:
+        nature_desc = f"An in-band SQL Injection attack (CWE-89) was intercepted against endpoint `{atk_target or '/api/search-customer'}` (Payload: `{atk_payload or 'UNION SELECT'}`). The query was quarantined to an isolated synthetic honeypot table. No genuine database records were exposed."
+    elif "idor" in atk_type or "bola" in atk_type:
+        nature_desc = f"A Broken Object Level Authorization (IDOR/BOLA - CWE-639) probe was detected targeting customer object `{atk_target or 'customer_id'}`. Deception defense served a synthetic honeypot customer profile with embedded canary tokens."
+    elif "traversal" in atk_type or "lfi" in atk_type:
+        nature_desc = f"A Path Traversal / Local File Inclusion (LFI - CWE-22) exploit was intercepted attempting to access `{atk_payload or '.env'}`. The server returned a planted decoy configuration containing canary honeytokens."
+    elif "ssrf" in atk_type:
+        nature_desc = f"A Server-Side Request Forgery (SSRF - CWE-918) probe was blocked attempting to query internal cloud metadata at `{atk_payload or '169.254.169.254'}`. Decoy canary IAM credentials were provided."
+    elif "rce" in atk_type:
+        nature_desc = f"A Remote Command Execution (RCE - CWE-78) attempt was intercepted (Payload: `{atk_payload or 'whoami'}`). The execution was neutralized inside an isolated deception DMZ sandbox."
+    elif "honeytoken" in atk_type or "canary" in atk_type:
+        nature_desc = f"An unauthorized client submitted a leaked Canary API Key / Honeytoken (`{atk_payload or 'AKIA_TRAPWIRE_CANARY'}`). The request triggered instant high-confidence attacker de-anonymization."
+    else:
+        nature_desc = (
+            "An unauthorized login attempt was detected on the company data portal after "
+            "multiple failed authentication attempts from a single source, consistent "
+            "with a credential brute-force attack. In accordance with the system's "
+            "deception-based defense (honeypot) design, the session was automatically "
+            "flagged as suspicious and served synthetic decoy customer data. No genuine "
+            "personal data belonging to real data principals was exposed."
+        )
+
+    flow.append(Paragraph(nature_desc, body))
     flow.append(Spacer(1, 0.4*cm))
 
     flow.append(Paragraph("2. Data Access Event (captured at time of download)", h2))
